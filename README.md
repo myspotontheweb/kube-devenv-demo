@@ -8,15 +8,15 @@ http://kubecloud.io/minikube-workflows/
 
 First start an instance of minikube
 
-   cd nginx-local
-   minikube start
+    cd nginx-local
+    minikube start
 
 Deploy the application
 
-   make create
+    make create
 
 Make some changes and run the build again
 
-   make local 
+    make local 
 
 
