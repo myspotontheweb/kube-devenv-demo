@@ -1,0 +1,29 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: nginx-local-mount
+  name: nginx-local-mount
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: nginx-local-mount
+  template:
+    metadata:
+      labels:
+        run: nginx-local-mount
+    spec:
+      containers:
+      - image: nginx-local-mount:create
+        name: nginx-local-mount
+        ports:
+        - containerPort: 80
+        
+        volumeMounts:
+        - mountPath: /usr/share/nginx/html/
+          name: nginx-local-mount-volume
+      volumes:
+      - name: nginx-local-mount-volume
+        hostPath:
+          path: /website
