@@ -1,40 +1,73 @@
-.PHONY: local create browser delete purge
-NAME=nginx-local
-TIMESTAMP=tmp-$(shell date +%s )
-REGISTRY=$(shell minikube ip -p registry):$(shell kubectl get service registry --context registry --namespace kube-system -o jsonpath='{.spec.ports[0].nodePort}')
 
+HOST_IP=192.168.192.63
+
+REPOSITORY=myspotonthewev
+NAME=demo
+TAG=local
+
+REGISTRY=$(HOST_IP):5000
+IMAGE_NAME=$(REGISTRY)/$(REPOSITORY)/$(NAME)
+DEV_DOCKER=$(shell docker-machine config dev)
+
+NPMRC=$(shell cat ~/.npmrc)
+
+HELM_RELEASE=demo-dev
+
+REPLICAS=3
+
+#
+# Global targets
+#
+build: build-image
+
+init: init-registry init-dev init-k8s init-secrets
+
+clean-all: clean-registry clean-dev clean-k8s
+
+#
+# Init targets
+#
 init-registry:
-	minikube start -p registry
-	minikube addons enable registry -p registry
-	sleep 10
-	kubectl patch service registry -p '{"spec":{"type":"NodePort"}}' --context registry --namespace kube-system
+	docker run -d -p 5000:5000 --name registry registry:2
 
-init-dev:
-	minikube start --insecure-registry=$(REGISTRY)
+init-dev: 
+	docker-machine create dev --engine-insecure-registry $(REGISTRY)
 
-local:
-	docker image build -t $(NAME):$(TIMESTAMP) -f Dockerfile .
-	docker tag $(NAME):$(TIMESTAMP) $(REGISTRY)/$(NAME):$(TIMESTAMP)
-	docker push $(REGISTRY)/$(NAME):$(TIMESTAMP)
-	kubectl set image -f kubernetes/deploy/deployment.yaml $(NAME)=$(REGISTRY)/$(NAME):$(TIMESTAMP)
+init-k8s:
+	minikube start --insecure-registry $(REGISTRY)
+	minikube addons enable ingress
+	helm init
 
-create:
-	docker image build -t $(NAME):create -f Dockerfile .
-	docker tag $(NAME):create $(REGISTRY)/$(NAME):create
-	docker push $(REGISTRY)/$(NAME):create
-	kubectl run $(NAME) --image=$(REGISTRY)/$(NAME):create --port=80
-	kubectl expose deployment $(NAME) --type=NodePort
+init-secrets:
+	@docker-machine ssh dev "echo $(NPMRC) > npmrc"
+	docker $(DEV_DOCKER) network create build || echo "Network exists"
+	docker $(DEV_DOCKER) run -d --name secrets --network build -v /home/docker:/usr/share/nginx/html nginx:alpine
 
-browser:
-	minikube service $(NAME)
+#
+# Build targets
+#
+build-image:
+	docker $(DEV_DOCKER) build --network build --rm -t $(IMAGE_NAME):$(TAG) .
+	docker $(DEV_DOCKER) push  $(IMAGE_NAME):$(TAG)
 
-delete:
-	kubectl delete service $(NAME)
-	kubectl delete deployment $(NAME)
+#
+# Deploy targets
+#
+deploy:
+	helm install chart/$(NAME) --name $(HELM_RELEASE) --namespace $(NAME) --set image.repository=$(IMAGE_NAME),image.tag=$(TAG),replicaCount=$(REPLICAS)
 
-purge:
-	docker rmi $$(docker images $(NAME) -q) -f
+#
+# Clean targets
+#
+clean:
+	helm delete --purge $(HELM_RELEASE)
 
-clean-all:
-	minikube delete -p registry
+clean-registry:
+	docker rm -v -f registry 
+
+clean-dev:
+	docker-machine rm -f dev
+
+clean-k8s:
 	minikube delete
+
