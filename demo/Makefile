@@ -35,6 +35,7 @@ init-registry:
 
 init-workspace: 
 	docker-machine create workspace --engine-insecure-registry $(REGISTRY)
+	docker-machine ssh workspace docker network create build
 
 init-k8s:
 	minikube start --insecure-registry $(REGISTRY)
@@ -43,7 +44,6 @@ init-k8s:
 
 init-secrets:
 	@docker-machine ssh workspace "echo $(shell cat ~/.npmrc) > npmrc"
-	docker $(WORKSPACE_DOCKER) network create build || true
 	docker $(WORKSPACE_DOCKER) run -d --name secrets --network build -v /home/docker:/usr/share/nginx/html nginx:alpine
 
 #
