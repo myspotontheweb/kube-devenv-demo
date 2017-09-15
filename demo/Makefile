@@ -1,72 +1,73 @@
 
-HOST_IP=192.168.192.63
+HOST_IP:=192.168.192.63
 
-REPOSITORY=myspotonthewev
-NAME=demo
-TAG=local
+NAME:=demo
+REPOSITORY:=myspotontheweb
+TAG:=dev-$(shell date '+%Y%m%d%H%M%S')
 
-REGISTRY=$(HOST_IP):5000
-IMAGE_NAME=$(REGISTRY)/$(REPOSITORY)/$(NAME)
-DEV_DOCKER=$(shell docker-machine config dev)
+REGISTRY:=$(HOST_IP):5000
+IMAGE_NAME:=$(REGISTRY)/$(REPOSITORY)/$(NAME)
+WORKSPACE_DOCKER=$(shell docker-machine config workspace)
 
-NPMRC=$(shell cat ~/.npmrc)
+NPMRC:=$(shell cat ~/.npmrc)
 
-HELM_RELEASE=demo-dev
-
-REPLICAS=3
+HELM_RELEASE:=demo
 
 #
 # Global targets
 #
 build: build-image
 
-init: init-registry init-dev init-k8s init-secrets
+init: init-registry init-workspace init-k8s init-secrets
 
-clean-all: clean-registry clean-dev clean-k8s
+clean-all: clean-registry clean-workspace clean-k8s
 
 #
 # Init targets
 #
 init-registry:
-	docker run -d -p 5000:5000 --name registry registry:2
+	docker run -d -p 5000:5000 --name registry registry:2.2.0
+	docker run -d -p 8080:80 --name registry-ui --link registry:registry -e ENV_DOCKER_REGISTRY_HOST=registry -e ENV_DOCKER_REGISTRY_PORT=5000 konradkleine/docker-registry-frontend:v2
 
-init-dev: 
-	docker-machine create dev --engine-insecure-registry $(REGISTRY)
+init-workspace: 
+	docker-machine create workspace --engine-insecure-registry $(REGISTRY)
 
 init-k8s:
 	minikube start --insecure-registry $(REGISTRY)
 	minikube addons enable ingress
+	minikube addons disable registry
 	helm init
 
 init-secrets:
-	@docker-machine ssh dev "echo $(NPMRC) > npmrc"
-	docker $(DEV_DOCKER) network create build || echo "Network exists"
-	docker $(DEV_DOCKER) run -d --name secrets --network build -v /home/docker:/usr/share/nginx/html nginx:alpine
+	@docker-machine ssh workspace "echo $(NPMRC) > npmrc"
+	docker $(WORKSPACE_DOCKER) network create build || true
+	docker $(WORKSPACE_DOCKER) run -d --name secrets --network build -v /home/docker:/usr/share/nginx/html nginx:alpine
 
 #
 # Build targets
 #
 build-image:
-	docker $(DEV_DOCKER) build --network build --rm -t $(IMAGE_NAME):$(TAG) .
-	docker $(DEV_DOCKER) push  $(IMAGE_NAME):$(TAG)
+	docker $(WORKSPACE_DOCKER) build --network build --rm -t $(IMAGE_NAME):$(TAG) .
+	docker $(WORKSPACE_DOCKER) push  $(IMAGE_NAME):$(TAG)
 
 #
 # Deploy targets
 #
-deploy:
-	helm install chart/$(NAME) --name $(HELM_RELEASE) --namespace $(NAME) --set image.repository=$(IMAGE_NAME),image.tag=$(TAG),replicaCount=$(REPLICAS)
+deploy: build-image
+	helm upgrade --install $(HELM_RELEASE) chart/$(NAME) --namespace $(NAME) --set image.repository=$(IMAGE_NAME),image.tag=$(TAG),image.pullPolicy=Always
 
 #
 # Clean targets
 #
 clean:
-	helm delete --purge $(HELM_RELEASE)
+	helm delete $(HELM_RELEASE)
 
 clean-registry:
+	docker rm -v -f registry-ui 
 	docker rm -v -f registry 
 
-clean-dev:
-	docker-machine rm -f dev
+clean-workspace:
+	docker-machine rm -f workspace
 
 clean-k8s:
 	minikube delete
