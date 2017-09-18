@@ -2,10 +2,7 @@
 #
 # Immediate vars
 #
-HELM_RELEASE:=go-demo
-NAME:=go-demo
-REPOSITORY:=myspotontheweb
-TAG:=dev-$(shell date '+%Y%m%d%H%M%S')
+NAME:=demo
 
 #
 # Deferred vars
@@ -40,8 +37,8 @@ init-k8s:
 	kubectl apply -n kube-system -f config/proxy-ui.yml
 
 init-draft:
-	draft create --app demo --pack go
-	echo "n|\$$(REGISTRY_SERVICE_HOST)|||teamwork|$(shell minikube ip).nip.io" | tr '|' '\n' | script -c "draft init"
+	draft create --app $(NAME) --pack go
+	echo "n|\$$(REGISTRY_SERVICE_HOST)|||teamwork|$(BASE_DOMAIN)" | tr '|' '\n' | script -c "draft init"
 
 #
 # Logging targets
@@ -49,8 +46,8 @@ init-draft:
 log-draft:
 	stern -n kube-system draft
 
-log-demo:
-	stern demo
+log:
+	stern $(NAME)
 
 #
 # Clean targets
