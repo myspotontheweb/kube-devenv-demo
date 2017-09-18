@@ -15,7 +15,9 @@ BASE_DOMAIN=$(shell minikube ip).nip.io
 #
 all:
 
-init: init-proxy init-k8s init-draft
+init1: init-proxy init-k8s
+
+init2: init-registry-ui init-draft
 
 clean-all: clean-proxy clean-k8s clean-draft
 
@@ -34,11 +36,13 @@ init-k8s:
 	minikube addons enable ingress
 	minikube addons enable registry
 	helm init
-	kubectl apply -n kube-system -f config/proxy-ui.yml
+
+init-registry-ui:
+	helm install --namespace kube-system --name regui config/registry-ui --set ingress.hosts[0]=registry.$(BASE_DOMAIN)
 
 init-draft:
-	draft create --app $(NAME) --pack go
 	echo "n|\$$(REGISTRY_SERVICE_HOST)|||teamwork|$(BASE_DOMAIN)" | tr '|' '\n' | script -c "draft init"
+	draft create --app $(NAME) --pack go
 
 #
 # Logging targets
