@@ -17,5 +17,8 @@ push:
 package:
 	helm package -d  ~/.helm/repository/local charts/demo
 
+bump:
+	bumpversion patch --list --commit --tag
+
 serve:
 	helm serve
