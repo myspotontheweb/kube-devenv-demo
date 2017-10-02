@@ -1,7 +1,7 @@
 NAME    := demo
 TAG     := $(shell git log -1 --pretty=%H)
 IMG     := $(NAME):$(TAG)
-RELEASE := $(NAME):v0.4.8
+RELEASE := $(NAME):v0.4.9
 LATEST  := $(NAME):latest
 
 build:
